@@ -10,7 +10,10 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from atmeexpy.client import AtmeexClient
+from atmeexpy.device import Device
 from atmeexpy.exceptions import AtmeexAuthError
+from atmeexpy.models import DeviceConditionModel
+from dacite import DaciteError
 
 from .const import CONF_ACCESS_TOKEN, CONF_REFRESH_TOKEN
 
@@ -40,6 +43,8 @@ class AtmeexDataCoordinator(DataUpdateCoordinator):
 
         try:
             device_list = await self.api.get_devices()
+            for device in device_list:
+                await self._async_fetch_condition(device)
         except AtmeexAuthError as err:
             raise ConfigEntryAuthFailed from err
         except httpx.HTTPStatusError as err:
@@ -55,3 +60,13 @@ class AtmeexDataCoordinator(DataUpdateCoordinator):
             data[CONF_REFRESH_TOKEN] = self.api.refresh_token
 
             self.hass.config_entries.async_update_entry(self.entry, data=data)
+
+    async def _async_fetch_condition(self, device: Device):
+        """Fetch current sensor readings, the device list endpoint does not include them."""
+        resp = await self.api.http_client.get(f"/devices/{device.model.id}")
+        resp.raise_for_status()
+        condition = resp.json().get("condition")
+        try:
+            device.model.condition = DeviceConditionModel.fromdict(condition) if condition else None
+        except DaciteError:
+            _LOGGER.warning("Unexpected condition format for device %s: %s", device.model.id, condition)
