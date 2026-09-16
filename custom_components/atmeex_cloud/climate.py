@@ -157,9 +157,8 @@ class AtmeexClimateEntity(AtmeexBaseEntity, ClimateEntity):
                 self._last_temp = self.target_temperature
             self._attr_target_temperature = None
 
-        condition = self.device.model.condition
-        self._attr_current_temperature = condition.temp_room / 10 if condition else None
-        self._attr_current_humidity = condition.hum_room if condition else None
+        self._attr_current_temperature = self.coordinator.get_reading(self.device_id, "temp_room", divider=10)
+        self._attr_current_humidity = self.coordinator.get_reading(self.device_id, "hum_room")
 
         # Determine HVAC mode based on power, damper position, and heating
         # damp_pos: 0=open, 1=mixed, 2=closed

@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.components.sensor import (
@@ -12,7 +11,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfRatio, UnitOfTemperature
 
 from atmeexpy.device import Device
-from atmeexpy.models import DeviceConditionModel
 
 from .coordinator import AtmeexDataCoordinator
 from .entity import AtmeexBaseEntity
@@ -21,7 +19,9 @@ from .const import DOMAIN
 
 @dataclass(frozen=True, kw_only=True)
 class AtmeexSensorEntityDescription(SensorEntityDescription):
-    value_fn: Callable[[DeviceConditionModel], float | int]
+    """Sensor description, key is the reading name in the device condition."""
+
+    divider: int = 1
 
 
 SENSORS = (
@@ -31,7 +31,7 @@ SENSORS = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        value_fn=lambda condition: condition.temp_room / 10,
+        divider=10,
     ),
     AtmeexSensorEntityDescription(
         key="temp_in",
@@ -39,7 +39,7 @@ SENSORS = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        value_fn=lambda condition: condition.temp_in / 10,
+        divider=10,
     ),
     AtmeexSensorEntityDescription(
         key="hum_room",
@@ -47,7 +47,6 @@ SENSORS = (
         device_class=SensorDeviceClass.HUMIDITY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
-        value_fn=lambda condition: condition.hum_room,
     ),
     AtmeexSensorEntityDescription(
         key="co2_ppm",
@@ -55,7 +54,6 @@ SENSORS = (
         device_class=SensorDeviceClass.CO2,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfRatio.PARTS_PER_MILLION,
-        value_fn=lambda condition: condition.co2_ppm,
     ),
 )
 
@@ -63,10 +61,12 @@ SENSORS = (
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities):
     coordinator: AtmeexDataCoordinator = hass.data[DOMAIN][config_entry.entry_id]
 
+    # Not every device has every sensor, create only the ones it reports
     async_add_entities(
         AtmeexSensorEntity(device, coordinator, description)
         for device in coordinator.devices.values()
         for description in SENSORS
+        if coordinator.get_reading(device.model.id, description.key) is not None
     )
 
 
@@ -82,5 +82,5 @@ class AtmeexSensorEntity(AtmeexBaseEntity, SensorEntity):
         self._attr_unique_id = f"{device.model.id}_{description.key}"
 
     def _update_state(self):
-        condition = self.device.model.condition
-        self._attr_native_value = self.entity_description.value_fn(condition) if condition else None
+        description = self.entity_description
+        self._attr_native_value = self.coordinator.get_reading(self.device_id, description.key, description.divider)
