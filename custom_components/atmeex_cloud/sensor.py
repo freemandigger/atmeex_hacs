@@ -6,7 +6,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfRatio, UnitOfTemperature
 
@@ -60,14 +60,27 @@ SENSORS = (
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities):
     coordinator: AtmeexDataCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    added: set[str] = set()
 
-    # Not every device has every sensor, create only the ones it reports
-    async_add_entities(
-        AtmeexSensorEntity(device, coordinator, description)
-        for device in coordinator.devices.values()
-        for description in SENSORS
-        if coordinator.get_reading(device.model.id, description.key) is not None
-    )
+    # Not every device has every sensor, create only the ones it reports.
+    # Readings may be missing on the first fetch (device offline), so check on every update.
+    @callback
+    def add_new_sensors():
+        new_entities = []
+        for device in coordinator.devices.values():
+            for description in SENSORS:
+                unique_id = f"{device.model.id}_{description.key}"
+                if unique_id in added or coordinator.get_reading(device.model.id, description.key) is None:
+                    continue
+
+                added.add(unique_id)
+                new_entities.append(AtmeexSensorEntity(device, coordinator, description))
+
+        if new_entities:
+            async_add_entities(new_entities)
+
+    add_new_sensors()
+    config_entry.async_on_unload(coordinator.async_add_listener(add_new_sensors))
 
 
 class AtmeexSensorEntity(AtmeexBaseEntity, SensorEntity):
