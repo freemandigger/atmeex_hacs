@@ -80,7 +80,7 @@ Perfect for simple on/off control with fresh air supply in automations.
 
 ### Switch (Auto mode, Night mode)
 
-Turn the breather's auto mode and night mode on and off, like the buttons with the same names in the Atmeex app.
+Turn the breather's auto mode and night mode on and off, like the buttons with the same names in the Atmeex app. The modes exclude each other: turning one on turns the other off.
 
 In auto mode the breather picks the fan speed itself, so a manual speed change (Number, Fan, fan mode in Climate) turns auto mode off.
 
