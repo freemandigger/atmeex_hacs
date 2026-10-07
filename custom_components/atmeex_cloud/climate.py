@@ -108,9 +108,7 @@ class AtmeexClimateEntity(AtmeexBaseEntity, ClimateEntity):
         self._sync_update()
 
     async def async_set_fan_mode(self, fan_mode: str):
-        await self._async_call_with_auth_check(
-            self.device.set_fan_speed(int(fan_mode.split("_")[1])-1)
-        )
+        await self._async_set_fan_speed(int(fan_mode.split("_")[1])-1)
 
         self._sync_update()
 
