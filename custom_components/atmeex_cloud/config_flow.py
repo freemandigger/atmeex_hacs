@@ -67,6 +67,14 @@ OPTIONS_SCHEMA = vol.Schema(
 )
 
 
+async def _async_has_devices(client: AtmeexClient) -> bool:
+    # client.get_devices() returns nothing when a device lacks a field atmeexpy requires,
+    # and the cloud stopped sending some of them in October 2026
+    resp = await client.http_client.get("/devices")
+    resp.raise_for_status()
+    return len(resp.json()) > 0
+
+
 class AtmeexConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for atmeex cloud."""
 
@@ -105,9 +113,7 @@ class AtmeexConfigFlow(ConfigFlow, domain=DOMAIN):
                 await client.signin_with_email(
                     user_input[CONF_EMAIL], user_input[CONF_PASSWORD]
                 )
-                devices = await client.get_devices()
-
-                if len(devices) == 0:
+                if not await _async_has_devices(client):
                     errors["base"] = "no_devices"
                 else:
                     data = {
@@ -156,8 +162,13 @@ class AtmeexConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.warning("Atmeex cloud unavailable: %s %s", type(err).__name__, err)
                 errors["base"] = "cannot_connect"
 
+        return self._show_phone_form(errors)
+
+    def _show_phone_form(self, errors: dict):
         return self.async_show_form(
-            step_id="phone", data_schema=STEP_PHONE_DATA_SCHEMA, errors=errors
+            step_id="phone",
+            data_schema=self.add_suggested_values_to_schema(STEP_PHONE_DATA_SCHEMA, {CONF_PHONE: self._phone}),
+            errors=errors,
         )
 
     async def async_step_phone_code(self, user_input=None):
@@ -169,9 +180,7 @@ class AtmeexConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._client.signin_with_phone(
                     self._phone, user_input[CONF_PHONE_CODE]
                 )
-                devices = await self._client.get_devices()
-
-                if len(devices) == 0:
+                if not await _async_has_devices(self._client):
                     errors["base"] = "no_devices"
                 else:
                     data = {
@@ -197,6 +206,10 @@ class AtmeexConfigFlow(ConfigFlow, domain=DOMAIN):
             except httpx.TransportError as err:
                 _LOGGER.warning("Atmeex cloud unavailable: %s %s", type(err).__name__, err)
                 errors["base"] = "cannot_connect"
+
+        # A code works once and the form has no resend button: sending the number again brings a new SMS
+        if errors.get("base") in ("invalid_code", "no_devices"):
+            return self._show_phone_form(errors)
 
         return self.async_show_form(
             step_id="phone_code",

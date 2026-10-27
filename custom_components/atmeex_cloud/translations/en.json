@@ -40,7 +40,7 @@
                     "phone_code": "SMS Code"
                 },
                 "data_description": {
-                    "phone_code": "6-digit code from SMS"
+                    "phone_code": "Code from SMS"
                 }
             },
             "reauth_confirm": {
@@ -49,10 +49,10 @@
             }
         },
         "error": {
-            "no_devices": "No devices found in your account",
+            "no_devices": "No devices found in your account. Add the breezer in the Atmeex app and sign in again.",
             "auth": "Authentication failed. Please check your credentials.",
             "sms_send_failed": "Failed to send SMS code. Please check your phone number.",
-            "invalid_code": "Invalid SMS code. Please try again.",
+            "invalid_code": "Invalid or already used SMS code. Submit to get a new one.",
             "cannot_connect": "Atmeex cloud is unavailable. Please try again later.",
             "unknown": "Unexpected error occurred"
         },

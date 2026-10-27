@@ -30,6 +30,19 @@ def _identity(devices: list[dict]) -> list[tuple]:
     return [(data["id"], data["mac"], data["name"]) for data in devices]
 
 
+def _fill_dropped_fields(data: dict, condition: dict) -> None:
+    """Fill fields atmeexpy requires that the cloud stopped sending after its October 2026 restart."""
+    if data.get("socket_id") is None:
+        data["socket_id"] = ""
+    if data.get("fw_ver") is None:
+        data["fw_ver"] = condition.get("firmware_version") or ""
+
+    settings = data["settings"]
+    for key, default in (("id", 0), ("device_id", data["id"]), ("u_cool_mode", False)):
+        if settings.get(key) is None:
+            settings[key] = default
+
+
 class AtmeexDataCoordinator(DataUpdateCoordinator):
     """Coordinator for Atmeex devices."""
 
@@ -124,7 +137,9 @@ class AtmeexDataCoordinator(DataUpdateCoordinator):
                 # Readings are kept raw and read one by one instead of parsing them with the strict
                 # DeviceConditionModel: a null or missing field only empties that reading
                 condition = data.pop("condition", None)
-                conditions[data["id"]] = condition if isinstance(condition, dict) else {}
+                condition = condition if isinstance(condition, dict) else {}
+                conditions[data["id"]] = condition
+                _fill_dropped_fields(data, condition)
                 Device(self.api.http_client, data)
         except AtmeexAuthError as err:
             raise ConfigEntryAuthFailed from err
